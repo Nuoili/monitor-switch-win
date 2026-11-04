@@ -1,0 +1,10 @@
+# 统一换行：Mac 端的 .command 必须是 LF，否则双击直接报错退出
+* text=auto
+*.command text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+
+*.exe binary
+*.ico binary
+*.png binary
+*.zip binary
