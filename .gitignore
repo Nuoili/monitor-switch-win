@@ -1,16 +1,14 @@
 # ---- 打包产物 ----
-/源码/windows/build/
-/源码/windows/dist/
-/源码/windows/dist_bak/
-/源码/windows/dist_mac/
-/源码/windows/*.spec
+/源码/build/
+/源码/dist/
+/源码/dist_bak/
+/源码/*.spec
 __pycache__/
 *.py[cod]
 
-# ---- 部署用的 exe / 分发包 / 旧版备份（走 Releases 分发，不进仓库）----
+# ---- 部署用的 exe / 旧版备份（走 Releases 分发，不进仓库）----
 /*.exe
 /旧版备份/
-/*.zip
 
 # ---- 本机配置 ----
 # mac_ip.txt 里是这台机器当前的局域网地址，换网络就失效，只留模板在文档里

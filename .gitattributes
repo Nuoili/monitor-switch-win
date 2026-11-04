@@ -1,8 +1,5 @@
-# 统一换行：Mac 端的 .command 必须是 LF，否则双击直接报错退出
-* text=auto
-*.command text eol=lf
-*.sh text eol=lf
-*.py text eol=lf
+# 统一换行：仓库里的文本一律 LF，避免脚本在 Mac 上 \r 报错
+* text=auto eol=lf
 
 *.exe binary
 *.ico binary
