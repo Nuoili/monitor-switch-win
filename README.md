@@ -1,5 +1,7 @@
 # 显示器切换 · Windows 端
 
+**v2.3.0** — 与 Mac 端 [monitor-switch-mac](https://github.com/Nuoili/monitor-switch-mac) 同号发布，两端版本号必须保持一致。
+
 一台显示器接两台机器（Windows 主机 + MacBook），点一下就能换信号源，不用去按显示器背面的按钮。
 
 - 纯 ctypes 调 DDC/CI：`dxva2.dll` → `SetVCPFeature`，VCP `0x60` 写输入源，无第三方依赖。
@@ -27,13 +29,32 @@
 显示器切换.exe --dp / --win         静默切到 DP（Windows）
 显示器切换.exe --hdmi / --mac       静默切到 HDMI-1（Mac）
 显示器切换.exe --state              打印当前信号源，排查用
+显示器切换.exe --version            打印版本号
 ```
+
+版本号从哪来：`源码/monitor_switch_gui.py` 的 `APP_VERSION` 是唯一源头，
+`源码/build_win.py` 读它生成 exe 的版本资源。改版本只改那一处。
+
+## 卸载
+
+双击 `卸载器.bat`，它会：
+
+1. 结束正在运行的 `显示器切换.exe`
+2. 删除开机自启项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MonitorSwitch`
+3. 清理 `%TEMP%\MonitorSwitch` 下的错误日志
+4. 打开本文件夹并选中，由你把整个文件夹拖进回收站
+
+第 4 步故意留给人工：脚本删不掉"自己所在的文件夹"，硬删还会被杀软误判成木马
+（实测火绒会把带隐藏窗口 + 递归删除的卸载脚本直接当 `Trojan/Veil` 删掉）。
+拖进回收站既干净又能还原。源码不会丢，GitHub 上有完整仓库。
 
 ## 目录
 
 ```
 源码/               全部程序代码
-   monitor_switch_gui.py   主程序（窗口 + 托盘 + DDC 切换）
+   monitor_switch_gui.py   主程序（窗口 + 托盘 + DDC 切换），APP_VERSION 在这里
+   build_win.py            一键打包（自动生成版本资源，调 PyInstaller）
+   version_info.txt        exe 版本资源，由 build_win.py 生成，不入库
    app.manifest            PerMonitorV2 DPI 感知 + comctl32 v6
    icon.ico / tray_*.ico   程序图标与托盘图标
    gen_icon.py             重新生成图标
@@ -42,6 +63,8 @@
    _busy_test.py           切换状态机回归测试
    _single_instance_test.py 单实例 / 唤起窗口回归测试
 使用说明.txt         给使用者看的操作手册
+卸载器.bat           卸载（见上一节）
+CHANGELOG.md         版本变更记录
 ```
 
 ## 实现要点（踩过的坑）
@@ -55,19 +78,26 @@
 
 ## 自己编译
 
+版本号写在 `源码/monitor_switch_gui.py` 的 `APP_VERSION`，打包脚本会读它：
+
 ```bash
 pip install pyinstaller
-cd 源码
+python 源码/build_win.py          # 产物：源码/dist/显示器切换.exe
+```
+
+脚本内部等价于：
+
+```bash
 python -m PyInstaller --noconfirm --clean --onefile --noconsole \
-  --name MonitorSwitch --manifest app.manifest --icon icon.ico \
-  monitor_switch_gui.py
+  --name 显示器切换 --manifest 源码/app.manifest --icon 源码/icon.ico \
+  --version-file 源码/version_info.txt 源码/monitor_switch_gui.py
 ```
 
 回归测试（真机会弹出程序窗口）：
 
 ```bash
-python _single_instance_test.py dist/MonitorSwitch.exe
-python _busy_test.py
+python 源码/_single_instance_test.py 源码/dist/显示器切换.exe
+python 源码/_busy_test.py
 ```
 
 ## 与 Mac 端的协议

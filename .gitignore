@@ -17,3 +17,6 @@ __pycache__/
 # ---- 临时交接文件（Mac 分发包 / 待粘贴公钥）----
 /Mac端-*.zip
 /公钥-*.txt
+
+# ---- 打包时由 build_win.py 生成 ----
+/源码/version_info.txt

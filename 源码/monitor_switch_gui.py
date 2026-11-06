@@ -12,6 +12,7 @@
   --dp / --auto   静默切到 DP（Windows）
   --hdmi / --mac  静默切到 HDMI-1（Mac）
   --tray          直接以托盘方式启动（不弹窗口）
+  --version       打印版本号（与 Mac 端共用同一套版本号）
   不带参数        打开窗口
 
 单实例：程序已在运行时再双击图标，不会开出第二个窗口，而是把已有窗口
@@ -29,6 +30,10 @@ import winreg
 from ctypes import wintypes
 
 APP_TITLE = "显示器切换"
+# 版本号双端统一：Windows / Mac 两个仓库同号同发，改这里必须同步改 Mac 仓的 VERSION 文件。
+# 2.3.0 = 首次双端对齐版本（Win 2.2 的「来回切失效」修复 + 卸载器 + 版本可见化）
+APP_VERSION = "2.3.0"
+APP_TITLE_FULL = "%s v%s" % (APP_TITLE, APP_VERSION)
 VCP_INPUT = 0x60
 INPUT_DP = 0x0F
 INPUT_HDMI1 = 0x11
@@ -714,7 +719,7 @@ class App:
         self.brush = None
         self.quitting = False      # True 时关闭窗口才真退出，否则只是收进托盘
         self.tip_shown = False     # 托盘提示只弹一次
-        self._tip = APP_TITLE      # 托盘悬浮文字缓存，避免频繁读 DDC
+        self._tip = APP_TITLE_FULL  # 托盘悬浮文字缓存，避免频繁读 DDC
 
     def tray_text(self):
         return self._tip
@@ -772,7 +777,7 @@ class App:
         try:
             name, who = source_name(get_input())
             user32.SetWindowTextW(self.sub, name + ("（%s）" % who if who else ""))
-            self._tip = "%s · 当前 %s" % (APP_TITLE, name)
+            self._tip = "%s · 当前 %s" % (APP_TITLE_FULL, name)
             tray_tip(self._tip)
         except Exception:
             pass
@@ -1042,7 +1047,7 @@ def run_gui(selftest=False, start_hidden=False):
     x = wa.left + (wa.right - wa.left - w) // 2
     y = wa.top + (wa.bottom - wa.top - h) // 2
 
-    hwnd = user32.CreateWindowExW(0, cls, APP_TITLE, style, x, y, w, h, None, None, hinst, None)
+    hwnd = user32.CreateWindowExW(0, cls, APP_TITLE_FULL, style, x, y, w, h, None, None, hinst, None)
     if not hwnd:
         return 2
     if not start_hidden:
@@ -1106,6 +1111,13 @@ def wake_existing():
 
 def main():
     args = [a.lower() for a in sys.argv[1:]]
+    if "--version" in args or "-v" in args or "--ver" in args:
+        text = "%s %s" % (APP_TITLE, APP_VERSION)
+        print(text)
+        if getattr(sys, "frozen", False):
+            # 打包后是 noconsole，print 没地方去 —— 弹个窗口才看得见
+            user32.MessageBoxW(None, text, APP_TITLE, 0x40)
+        return 0
     if "--selftest-gui" in args:
         return run_gui(selftest=True)
     if "--state" in args:
