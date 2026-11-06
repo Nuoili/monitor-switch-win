@@ -1,11 +1,13 @@
 # 显示器切换 · Windows 端
 
-**v2.3.0** — 与 Mac 端 [monitor-switch-mac](https://github.com/Nuoili/monitor-switch-mac) 同号发布，两端版本号必须保持一致。
+**v2.3.1** — 与 Mac 端 [monitor-switch-mac](https://github.com/Nuoili/monitor-switch-mac) 同号发布，两端版本号必须保持一致。
+本版新增 Windows 端全局热键（Mac 端无此功能，仅版本号跟进）。
 
 一台显示器接两台机器（Windows 主机 + MacBook），点一下就能换信号源，不用去按显示器背面的按钮。
 
 - 纯 ctypes 调 DDC/CI：`dxva2.dll` → `SetVCPFeature`，VCP `0x60` 写输入源，无第三方依赖。
 - PyInstaller 打包单文件 exe，常驻托盘，**单实例**（重复双击只唤起已有窗口）。
+- **全局热键** `Ctrl+Alt+Shift+D`：不看屏幕也能来回切，切走之后还能摸黑按回来。
 - 显示器实测型号：AOC Q24G2（DP = Windows，HDMI-1 = Mac）。换屏只要 DDC 通路正常，改一下输入源编号即可。
 - Mac 端在另一个仓库：[monitor-switch-mac](https://github.com/Nuoili/monitor-switch-mac)。
 
@@ -19,6 +21,7 @@
 | 托盘右键 | 菜单：切到 Mac、切回 Windows、显示主窗口、开机自启、退出 |
 | 窗口右上角 × | 只收进托盘，**不是退出** |
 | 再双击一次 exe | 唤起已有窗口（单实例，不会开出第二个） |
+| `Ctrl+Alt+Shift+D` | 全局热键：两端来回切，不弹窗口 |
 
 命令行（供快捷方式 / 开机自启使用）：
 
@@ -30,10 +33,69 @@
 显示器切换.exe --hdmi / --mac       静默切到 HDMI-1（Mac）
 显示器切换.exe --state              打印当前信号源，排查用
 显示器切换.exe --version            打印版本号
+显示器切换.exe --hotkey             看当前热键与候选顺序
+显示器切换.exe --set-hotkey X       改热键，X 形如 Ctrl+Alt+Shift+F9
+显示器切换.exe --no-hotkey          本次不注册热键（排查冲突用）
 ```
 
 版本号从哪来：`源码/monitor_switch_gui.py` 的 `APP_VERSION` 是唯一源头，
 `源码/build_win.py` 读它生成 exe 的版本资源。改版本只改那一处。
+
+## 全局热键
+
+默认 **`Ctrl+Alt+Shift+D`**：按一下切走，再按一下切回来（toggle）。
+
+做成 toggle 而不是单向"切到 Mac"：切走之后这台 Windows 就黑屏了，鼠标键盘够不到
+任何按钮 —— 此时唯一还能用的入口就是热键本身。"摸黑按一下切回 Windows"能成立，
+这才是热键的价值。
+
+### 选键原则：避开所有已知全局热键
+
+`RegisterHotKey` 被占时只返回 FALSE，不会告诉你是谁占了。所以不能假设某个组合一定可用 ——
+程序内置 5 个候选，启动时按顺序试，第一个注册成功的才生效：
+
+| 顺序 | 组合 |
+|---|---|
+| 1 | `Ctrl+Alt+Shift+D` |
+| 2 | `Ctrl+Alt+Shift+M` |
+| 3 | `Ctrl+Alt+Shift+F9` |
+| 4 | `Ctrl+Alt+Shift+F10` |
+| 5 | `Ctrl+Shift+F9` |
+
+（实测：先占住第 1 个，程序会自动顺延到第 2 个并把它显示在托盘菜单里。）
+
+为什么一律用**三修饰键**——两修饰的组合在 Windows 上已被占满：
+
+| 组合 | 被谁占用 |
+|---|---|
+| `Ctrl+Alt+F1`~`F12` | Intel 核显图形热键 |
+| `Ctrl+Alt+A` | QQ 截图 |
+| `Ctrl+Alt+Insert` | NVIDIA |
+| `Ctrl+Alt+方向键` | 旧显卡屏幕旋转 |
+| `Alt+Z` / `Alt+R` | NVIDIA GeForce Experience / 录制 |
+| `Alt+A` | 微信截图 |
+| `Ctrl+Shift+*` | 输入法切换、钉钉 `Ctrl+Shift+A`、各类 IDE 默认键 |
+| `Alt+Shift` | 键盘布局 / 语言切换（系统级） |
+| `Win+*` | 全归系统：`L D E R I X P S V A K G H M U B C F`、数字键、方向键 |
+| `Ctrl+Space` / `Shift+Space` / `Ctrl+.` / `Ctrl+,` | 微软拼音 |
+| `Ctrl+Alt+Del`、`Ctrl+Shift+Esc`、`Alt+Tab`、`Alt+F4`、`PrintScreen`、`Win+Shift+S` | 安全键与截图键，系统直接吞掉，`RegisterHotKey` 根本注册不上，不必浪费候选位 |
+
+### 改键 / 临时关闭
+
+```bash
+显示器切换.exe --hotkey                        # 看当前生效的组合与候选顺序
+显示器切换.exe --set-hotkey Ctrl+Alt+Shift+F9  # 改（≥1 修饰键 + 1 主键，不能有空格）
+显示器切换.exe --no-hotkey                     # 本次不注册（排查冲突）
+```
+
+`--set-hotkey` 写 `HKCU\Software\MonitorSwitch\Hotkey`，并 `PostMessage` 通知正在运行的
+实例即刻换绑，不用重启；卸载器会把这条注册表项一起清掉。
+
+### 已知限制
+
+- 以管理员身份运行的前台程序（任务管理器、全屏游戏）会挡住普通权限程序的热键 ——
+  这是 UIPI，不是 bug。切到桌面再按即可。
+- 加了 `MOD_NOREPEAT`，按住不放只会触发一次，不会按键盘重复率连发。
 
 ## 卸载
 
@@ -41,10 +103,11 @@
 
 1. 结束正在运行的 `显示器切换.exe`
 2. 删除开机自启项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MonitorSwitch`
-3. 清理 `%TEMP%\MonitorSwitch` 下的错误日志
-4. 打开本文件夹并选中，由你把整个文件夹拖进回收站
+3. 删除热键配置 `HKCU\Software\MonitorSwitch`
+4. 清理 `%TEMP%\MonitorSwitch` 下的错误日志
+5. 打开本文件夹并选中，由你把整个文件夹拖进回收站
 
-第 4 步故意留给人工：脚本删不掉"自己所在的文件夹"，硬删还会被杀软误判成木马
+最后一步故意留给人工：脚本删不掉"自己所在的文件夹"，硬删还会被杀软误判成木马
 （实测火绒会把带隐藏窗口 + 递归删除的卸载脚本直接当 `Trojan/Veil` 删掉）。
 拖进回收站既干净又能还原。源码不会丢，GitHub 上有完整仓库。
 
@@ -75,6 +138,8 @@ CHANGELOG.md         版本变更记录
 - **单实例**：命名互斥体判重 + `RegisterWindowMessage("MonitorSwitch-ShowMe")` 让第二个进程通知第一个把窗口亮出来；`AttachThreadInput` 换前台权限，否则只闪任务栏。
 - **切 Mac 前先捅一下 Mac**：广播 UDP `WAKE`（端口 9998）给 Mac 端的监听脚本，0.4 秒后再发 DDC。多网段环境会同时向全局广播和各网段定向广播各发一份（有 VPN 时全局广播可能从虚拟网卡溜走）。
 - **`--noconsole` 下 `sys.stderr` 是 None**：原来的异常日志会二次抛异常吞掉真错误，现在写 `%TEMP%\MonitorSwitch\error.log`。
+- **热键注册失败不报原因**：`RegisterHotKey` 只回一个 FALSE，查不到是被谁占了。所以必须准备候选列表 + 顺延，并且失败要弹托盘气泡告知，不能静默。
+- **热键要绑窗口而不是线程**：`WM_HOTKEY` 走正常窗口消息，`WM_DESTROY` 里 `UnregisterHotKey`，避免窗口没了而组合还被占着。
 
 ## 自己编译
 

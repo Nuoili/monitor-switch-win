@@ -3,6 +3,32 @@
 双端统一版本号：**Windows（本仓库）与 Mac（monitor-switch-mac）同号同发**。
 发版时两边打同名 tag，仓库间版本号不一致视为发版未完成。
 
+## v2.3.1 — 2026-11-06
+
+Windows 端新增全局热键。Mac 端无对应功能改动，仅版本号跟进，保持双端同号。
+
+**新增**
+- **全局热键 `Ctrl+Alt+Shift+D`**：按一下切走，再按一下切回来（toggle）。
+  做成 toggle 是因为切到 Mac 之后 Windows 黑屏，唯一还能用的入口就是热键本身。
+- **候选顺延**：内置 5 个组合（`Ctrl+Alt+Shift+D` → `M` → `F9` → `F10` → `Ctrl+Shift+F9`），
+  启动时按顺序注册，被占用自动跳过。`RegisterHotKey` 失败不回原因，靠顺延兜底。
+- 托盘菜单新增一行灰字显示当前实际生效的热键；主窗口底部说明文字同步。
+- 命令行 `--hotkey`（查当前组合与候选顺序）、`--set-hotkey X`（改键，`PostMessage`
+  通知运行中的实例即刻换绑）、`--no-hotkey`（本次不注册，排查冲突用）。
+- 热键配置持久化在 `HKCU\Software\MonitorSwitch\Hotkey`。
+
+**变更**
+- 卸载器新增第 3 步：删除 `HKCU\Software\MonitorSwitch`（热键配置随之清掉）。
+- 热键触发走静默路径：不把主窗口叫到前台，避免打游戏/共享屏幕时突然蹦窗口；
+  结果用托盘气泡反馈。失败仍弹错误提示（此时屏幕还在本机，看得见）。
+
+**选键说明**
+一律用三修饰键。两修饰组合已被占满：`Ctrl+Alt+F1~F12`（Intel 核显）、
+`Ctrl+Alt+A`（QQ 截图）、`Alt+Z`/`Alt+R`（NVIDIA）、`Ctrl+Shift`（输入法）、
+`Alt+Shift`（键盘布局）、`Win+*`（全归系统）。安全键与截图键
+（`Ctrl+Alt+Del`、`Ctrl+Shift+Esc`、`Alt+Tab`、`PrintScreen`、`Win+Shift+S`）
+系统直接吞掉，根本注册不上，未纳入候选。
+
 ## v2.3.0 — 2026-11-06
 
 双端对齐版本，Windows 端首次对外标注版本号。

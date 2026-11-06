@@ -2,17 +2,24 @@
 """
 显示器切换 —— Windows 端正式程序
 
-只有两个功能：
+只有三个功能：
   1. 一键切换显示器信号源（DDC/CI · VCP 0x60）
-  2. 可选开机自动切回 Windows
+  2. 全局热键：不看屏幕也能来回切（默认 Ctrl+Alt+Shift+D）
+  3. 可选开机自动切回 Windows
 
 常驻系统托盘：关闭窗口只是收进托盘，右键图标可切信号源、显示窗口、退出。
+
+热键说明见 HOTKEY_DEFAULTS 上方的注释：候选列表按优先级注册，第一个成功的
+才生效，所以被占用的组合会被自动跳过。
 
 命令行（供快捷方式 / 开机自启）：
   --dp / --auto   静默切到 DP（Windows）
   --hdmi / --mac  静默切到 HDMI-1（Mac）
   --tray          直接以托盘方式启动（不弹窗口）
   --version       打印版本号（与 Mac 端共用同一套版本号）
+  --hotkey        打印当前生效的热键与候选顺序
+  --set-hotkey X  把热键改成一个自定义组合（如 Ctrl+Alt+Shift+F9）
+  --no-hotkey     本次不注册热键（排查占位用）
   不带参数        打开窗口
 
 单实例：程序已在运行时再双击图标，不会开出第二个窗口，而是把已有窗口
@@ -32,7 +39,8 @@ from ctypes import wintypes
 APP_TITLE = "显示器切换"
 # 版本号双端统一：Windows / Mac 两个仓库同号同发，改这里必须同步改 Mac 仓的 VERSION 文件。
 # 2.3.0 = 首次双端对齐版本（Win 2.2 的「来回切失效」修复 + 卸载器 + 版本可见化）
-APP_VERSION = "2.3.0"
+# 2.3.1 = 全局热键（Windows 端独有，Mac 端用自身脚本/快捷键）
+APP_VERSION = "2.3.1"
 APP_TITLE_FULL = "%s v%s" % (APP_TITLE, APP_VERSION)
 VCP_INPUT = 0x60
 INPUT_DP = 0x0F
@@ -40,6 +48,8 @@ INPUT_HDMI1 = 0x11
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_NAME = "MonitorSwitch"
+CFG_KEY = r"Software\MonitorSwitch"      # 本程序自己的配置（目前只存自定义热键）
+CFG_HOTKEY = "Hotkey"
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
@@ -282,6 +292,165 @@ def log_error(e):
         pass
 
 
+# ----------------------------------------------------------- 全局热键
+
+# 修饰键位标志（定义在这里而不是「常量」段，因为下面的候选表在模块导入时就要用）
+MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN = 0x0001, 0x0002, 0x0004, 0x0008
+# 按住不放只触发一次；不加这个，系统会按键盘重复率狂发 WM_HOTKEY
+MOD_NOREPEAT = 0x4000
+HOTKEY_ID = 0xA001
+
+# 候选热键：从第一个开始试，第一个注册成功的才生效；被占用会自动跳到下一个。
+#
+# 为什么一律用「三修饰键 + 字母/功能键」：
+#   两修饰的组合在 Windows 上基本被占满了 ——
+#     Ctrl+Alt+*   Intel 核显图形热键占 F1~F12；NVIDIA 用 Alt+Z、Alt+R、
+#                  Ctrl+Alt+Insert；QQ 截图 Ctrl+Alt+A；旧显卡旋转屏 Ctrl+Alt+方向键
+#     Ctrl+Shift+* 输入法切换、钉钉 Ctrl+Shift+A、IDE / 浏览器一堆默认键
+#     Alt+Shift    语言与键盘布局切换（系统级，抢不到）
+#     Alt+*        微信截图 Alt+A、各软件菜单栏 Alt+F / Alt+E
+#     Win+*        全部归系统：Win+L/D/E/R/I/X/P/S/V/A/K/G/H/M/U/B/C/F/数字/方向键…
+#   多加一个修饰键后几乎不撞车，代价是要三根手指 —— 对「一天切几次」的操作够用，
+#   换来的是「按了必响，绝不被别的软件截胡」。
+#
+# 另外刻意避开的：
+#   Ctrl+Alt+Del、Ctrl+Shift+Esc、Ctrl+Esc、Alt+Tab、Alt+Esc、Alt+F4、
+#   PrintScreen、Alt+PrintScreen、Win+Shift+S —— 安全键与截图键，系统直接吞掉，
+#   RegisterHotKey 本来就注册不上，别浪费候选位。
+#   Ctrl+Space、Ctrl+Shift、Shift+Space、Ctrl+.、Ctrl+, —— 微软拼音热键。
+#   F1 / F11 / F12 —— 帮助、全屏、开发者工具。
+#   Win+Space —— 输入法切换。
+HOTKEY_DEFAULTS = [
+    ("Ctrl+Alt+Shift+D", MOD_CONTROL | MOD_ALT | MOD_SHIFT, ord("D")),
+    ("Ctrl+Alt+Shift+M", MOD_CONTROL | MOD_ALT | MOD_SHIFT, ord("M")),
+    ("Ctrl+Alt+Shift+F9", MOD_CONTROL | MOD_ALT | MOD_SHIFT, 0x78),   # VK_F9
+    ("Ctrl+Alt+Shift+F10", MOD_CONTROL | MOD_ALT | MOD_SHIFT, 0x79),  # VK_F10
+    ("Ctrl+Shift+F9", MOD_CONTROL | MOD_SHIFT, 0x78),
+]
+
+_VK_NAMED = {
+    "space": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B,
+    "insert": 0x2D, "delete": 0x2E, "home": 0x24, "end": 0x23,
+    "pageup": 0x21, "pagedown": 0x22,
+    "left": 0x25, "up": 0x26, "right": 0x27, "down": 0x28,
+    "`": 0xC0, "-": 0xBD, "=": 0xBB, "[": 0xDB, "]": 0xDD,
+    "\\": 0xDC, ";": 0xBA, "'": 0xDE, ",": 0xBC, ".": 0xBE, "/": 0xBF,
+}
+
+
+def _vk_of(name):
+    """键名 -> 虚拟键码，认不出来返回 None。"""
+    low = name.lower()
+    if low in _VK_NAMED:
+        return _VK_NAMED[low]
+    if len(name) == 1:
+        c = name.upper()
+        if ("A" <= c <= "Z") or ("0" <= c <= "9"):
+            return ord(c)
+    if low.startswith("f") and low[1:].isdigit():
+        n = int(low[1:])
+        if 1 <= n <= 24:
+            return 0x6F + n                  # VK_F1 = 0x70
+    return None
+
+
+def parse_hotkey(text):
+    """"Ctrl+Alt+Shift+D" -> (mods, vk)；写错一个字就返回 None。
+
+    强制要求「至少一个修饰键 + 一个主键」：否则 --set-hotkey D 会把裸字母 D
+    注册成全局热键，全系统打字都打不出来。
+    """
+    if not text:
+        return None
+    mods, vk = 0, None
+    for part in [p.strip() for p in text.split("+") if p.strip()]:
+        low = part.lower()
+        if low in ("ctrl", "control"):
+            mods |= MOD_CONTROL
+        elif low == "alt":
+            mods |= MOD_ALT
+        elif low == "shift":
+            mods |= MOD_SHIFT
+        elif low in ("win", "super"):
+            mods |= MOD_WIN
+        else:
+            k = _vk_of(part)
+            if k is None:
+                return None
+            vk = k
+    if not mods or vk is None:
+        return None
+    return mods, vk
+
+
+def cfg_get(name):
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CFG_KEY) as k:
+            v, _ = winreg.QueryValueEx(k, name)
+            return v
+    except OSError:
+        return None
+
+
+def cfg_set(name, value):
+    try:
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, CFG_KEY, 0,
+                                winreg.KEY_SET_VALUE) as k:
+            winreg.SetValueEx(k, name, 0, winreg.REG_SZ, value)
+        return True
+    except OSError:
+        return False
+
+
+def hotkey_candidates():
+    """自定义的排第一，其余按内置顺序去重。"""
+    out, seen = [], set()
+    custom = cfg_get(CFG_HOTKEY)
+    if custom:
+        parsed = parse_hotkey(custom)
+        if parsed:
+            desc = custom.strip()
+            out.append((desc, parsed[0], parsed[1]))
+            seen.add(desc.lower())
+    for desc, mods, vk in HOTKEY_DEFAULTS:
+        if desc.lower() in seen:
+            continue
+        out.append((desc, mods, vk))
+        seen.add(desc.lower())
+    return out
+
+
+_hotkey = [None]        # 实际生效的热键字符串；None = 一个都没注册上
+
+
+def hotkey_register(hwnd):
+    """按候选顺序注册，返回生效的组合名；全被占用返回 None。
+
+    注册到窗口上（而不是线程）是为了让 WM_HOTKEY 走正常的窗口消息。
+    """
+    for desc, mods, vk in hotkey_candidates():
+        # MOD_NOREPEAT：按住不放只触发一次，否则会按键盘重复率连发
+        if user32.RegisterHotKey(hwnd, HOTKEY_ID, mods | MOD_NOREPEAT, vk):
+            _hotkey[0] = desc
+            return desc
+    _hotkey[0] = None
+    return None
+
+
+def hotkey_unregister(hwnd):
+    """必须注销：热键是进程级注册，进程崩了才自动释放，正常退出不会。"""
+    if _hotkey[0]:
+        try:
+            user32.UnregisterHotKey(hwnd, HOTKEY_ID)
+        except Exception:
+            pass
+    _hotkey[0] = None
+
+
+def hotkey_label():
+    return _hotkey[0] or "未启用"
+
+
 # ----------------------------------------------------------- 自启动
 
 def exe_path():
@@ -342,6 +511,7 @@ WM_COMMAND, WM_TIMER, WM_SETFONT = 0x0111, 0x0113, 0x0030
 WM_CTLCOLORSTATIC = 0x0138
 WM_NULL = 0x0000
 WM_LBUTTONUP, WM_RBUTTONUP, WM_LBUTTONDBLCLK = 0x0202, 0x0205, 0x0203
+WM_HOTKEY = 0x0312
 
 # ---- 托盘
 WM_APP = 0x8000
@@ -349,7 +519,7 @@ WM_TRAY = WM_APP + 1          # 托盘图标的回调消息
 NIM_ADD, NIM_MODIFY, NIM_DELETE = 0, 1, 2
 NIF_MESSAGE, NIF_ICON, NIF_TIP, NIF_INFO = 0x01, 0x02, 0x04, 0x10
 NIIF_INFO = 0x01
-MF_STRING, MF_CHECKED, MF_SEPARATOR = 0x0000, 0x0008, 0x0800
+MF_STRING, MF_CHECKED, MF_SEPARATOR, MF_GRAYED = 0x0000, 0x0008, 0x0800, 0x0001
 TPM_RIGHTBUTTON, TPM_RETURNCMD = 0x0002, 0x0100
 ID_TRAY = 1
 MENU_MAC, MENU_WIN, MENU_SHOW, MENU_AUTO, MENU_QUIT = 201, 202, 203, 204, 205
@@ -521,6 +691,10 @@ user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
 user32.FindWindowW.restype = wintypes.HWND
 user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(RECT)]
 user32.GetWindowRect.restype = wintypes.BOOL
+user32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
+user32.RegisterHotKey.restype = wintypes.BOOL
+user32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.UnregisterHotKey.restype = wintypes.BOOL
 user32.GetDC.argtypes = [wintypes.HWND]
 user32.GetDC.restype = wintypes.HDC
 user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
@@ -542,6 +716,8 @@ WM_TASKBARCREATED = user32.RegisterWindowMessageW("TaskbarCreated")
 # 第二个进程双击启动时，靠这条注册消息通知已有实例“把窗口亮出来”。
 # RegisterWindowMessage 对同名消息在所有进程里返回同一个值，不需要别的 IPC。
 WM_SHOWME = user32.RegisterWindowMessageW("MonitorSwitch-ShowMe")
+# --set-hotkey 改完注册表后用它戳已运行的实例，让它当场换绑，不用重启程序
+WM_RELOAD_HOTKEY = user32.RegisterWindowMessageW("MonitorSwitch-ReloadHotkey")
 
 _nid = [None]        # 当前登记中的 NOTIFYICONDATAW
 _tray_on = [False]   # 托盘是否真的挂上了（挂不上就不能靠隐藏窗口，否则窗口找不回来）
@@ -689,6 +865,9 @@ def tray_menu(hwnd):
         return 0
     user32.AppendMenuW(hm, MF_STRING, MENU_MAC, "切到 Mac（HDMI-1）")
     user32.AppendMenuW(hm, MF_STRING, MENU_WIN, "切回 Windows（DisplayPort）")
+    # 灰显一行把热键摆在眼前，省得用户去翻说明；点不动也不占菜单位
+    user32.AppendMenuW(hm, MF_STRING | MF_GRAYED, 0,
+                       "热键 %s · 来回切" % hotkey_label())
     user32.AppendMenuW(hm, MF_SEPARATOR, 0, None)
     user32.AppendMenuW(hm, MF_STRING, MENU_SHOW, "显示主窗口")
     user32.AppendMenuW(hm, MF_STRING | (MF_CHECKED if autostart_on() else 0),
@@ -720,9 +899,18 @@ class App:
         self.quitting = False      # True 时关闭窗口才真退出，否则只是收进托盘
         self.tip_shown = False     # 托盘提示只弹一次
         self._tip = APP_TITLE_FULL  # 托盘悬浮文字缓存，避免频繁读 DDC
+        self.no_hotkey = False     # --no-hotkey：本次不注册热键（排查占位用）
 
     def tray_text(self):
         return self._tip
+
+    def tip_text(self):
+        """窗口底部那行说明，把当前实际生效的热键摆出来。"""
+        if self.no_hotkey:
+            return "本次未启用热键 · 关闭窗口后常驻托盘"
+        if _hotkey[0]:
+            return "热键 %s 来回切 · 关闭窗口后常驻托盘" % _hotkey[0]
+        return "热键未启用（候选组合被占用）· 右键托盘图标可切换"
 
     def S(self, v):
         return int(round(v * self.dpi / 96.0))
@@ -768,8 +956,7 @@ class App:
         self.button("切到 Mac", 26, 100, 174, 54, ID_MAC)
         self.button("切回 Windows", 220, 100, 174, 54, ID_WIN)
         self.checkbox("开机时自动切回 Windows", 26, 172, 368, 26, autostart_on(), ID_CHK)
-        self.static("DDC/CI 直接控制显示器 · 关闭窗口后常驻托盘",
-                    26, 214, 368, 22, 8.5, False, FG_TIP, "tip")
+        self.static(self.tip_text(), 26, 214, 368, 22, 8.5, False, FG_TIP, "tip")
         # DDC 探测偶尔要重试一两秒，同步做会卡住窗口创建；交给定时器异步读
         user32.SetTimer(self.hwnd, TIMER_REFRESH, 60, None)
 
@@ -782,23 +969,28 @@ class App:
         except Exception:
             pass
 
-    def do_switch(self, value, label):
+    def do_switch(self, value, label, quiet=False):
         """执行切换。
+
+        quiet=True 是热键用的静默路径：不把主窗口叫到前台 —— 正在打游戏、
+        看视频、开会共享屏幕时按一下热键，屏幕上不该突然蹦出一个窗口。
 
         注意 busy 必须走 finally 复位：以前只在失败分支清，成功一次之后
         busy 永远是 True，后面每次点击都被 `if self.busy: return` 静默吞掉
         —— 这正是"切到 Mac、切回来、再点切 Mac 就没反应"的原因。
         """
         if self.busy:
-            self.say("上一次切换还没结束…")
+            if not quiet:
+                self.say("上一次切换还没结束…")
             return
         self.busy = True
         try:
             # 从托盘菜单点进来时窗口是隐藏的，先亮出来，否则看不到任何过程
-            if self.hwnd:
+            if self.hwnd and not quiet:
                 user32.ShowWindow(self.hwnd, SW_SHOW)
                 user32.SetForegroundWindow(self.hwnd)
-            self.say("正在切到 %s …" % label)
+            if not quiet:
+                self.say("正在切到 %s …" % label)
             if value == INPUT_HDMI1:
                 # 先让 Mac 重新协商一次，再切信号源，否则撞上显示器的"无信号"锁存
                 wake_mac()
@@ -812,7 +1004,12 @@ class App:
                 time.sleep(0.8)
             if ok:
                 self.say("已切换到 " + label)
-                user32.SetTimer(self.hwnd, TIMER_CLOSE, 1200, None)
+                if quiet:
+                    # 热键路径没有可见窗口，用托盘气泡给个确认。
+                    # 切走那一下看不到，切回来时能看到，等于留了条"上次干了什么"。
+                    tray_balloon(APP_TITLE_FULL, "已切到 %s" % label)
+                else:
+                    user32.SetTimer(self.hwnd, TIMER_CLOSE, 1200, None)
             else:
                 self.say("切换失败")
                 user32.MessageBoxW(self.hwnd,
@@ -824,6 +1021,24 @@ class App:
                                    APP_TITLE, 0x40000 | 0x10)
         finally:
             self.busy = False
+
+    def hotkey_switch(self):
+        """热键：在两端之间来回切（toggle）。
+
+        为什么不做成「切到 Mac」单向：切走之后这台 Windows 就黑屏了，鼠标键盘
+        够不到任何按钮 —— 这时唯一还能用的入口就是热键自己。做成 toggle，
+        「摸黑按一下切回 Windows」才成立，这也是热键最大的价值所在。
+        """
+        if self.busy:
+            return
+        cur = get_input()
+        if cur == INPUT_HDMI1:
+            target, label = INPUT_DP, "DisplayPort（Windows）"
+        else:
+            # 读不到当前值（显示器休眠 / DDC 没回话）时按最常见场景走：
+            # 人在 Windows 上，下一步是想去 Mac。
+            target, label = INPUT_HDMI1, "HDMI-1（Mac）"
+        self.do_switch(target, label, quiet=True)
 
     def say(self, text):
         """改状态文字并立刻重绘 —— 同步 sleep 期间消息循环不转，
@@ -909,7 +1124,26 @@ def wndproc(hwnd, msg, wparam, lparam):
                 app.dpi = 96
             if app.dpi < 96:
                 app.dpi = 96
+            # 先注册热键再 build：build 里那行说明文字要读到实际生效的组合
+            if not app.no_hotkey:
+                try:
+                    hotkey_register(hwnd)
+                except Exception as e:
+                    log_error(e)
             app.build()
+            return 0
+
+        if msg == WM_HOTKEY:
+            if wparam == HOTKEY_ID:
+                app.hotkey_switch()
+            return 0
+
+        if msg == WM_RELOAD_HOTKEY and msg:
+            # 另一个进程用 --set-hotkey 改完注册表后戳我一下，免得重启程序
+            hotkey_unregister(hwnd)
+            hotkey_register(hwnd)
+            if "tip" in app.ctrls:
+                user32.SetWindowTextW(app.ctrls["tip"][0], app.tip_text())
             return 0
 
         if msg == WM_SHOWME and msg:
@@ -975,6 +1209,7 @@ def wndproc(hwnd, msg, wparam, lparam):
             return 0
 
         if msg == WM_DESTROY:
+            hotkey_unregister(hwnd)
             tray_remove()
             user32.PostQuitMessage(0)
             return 0
@@ -1056,6 +1291,12 @@ def run_gui(selftest=False, start_hidden=False):
         user32.SetForegroundWindow(hwnd)
     tray_add(hwnd, app.tray_text())
 
+    if not app.no_hotkey and _hotkey[0] is None:
+        # 候选全被占用：不静默失败，告诉用户一声，并指出还能怎么用
+        tray_balloon(APP_TITLE,
+                     "热键没注册上：候选组合都被别的程序占了。\n"
+                     "右键托盘图标照样能切；换组合见 使用说明.txt。")
+
     if selftest:
         user32.SetTimer(hwnd, TIMER_TEST, 1200, None)
 
@@ -1110,7 +1351,8 @@ def wake_existing():
 
 
 def main():
-    args = [a.lower() for a in sys.argv[1:]]
+    raw = sys.argv[1:]
+    args = [a.lower() for a in raw]
     if "--version" in args or "-v" in args or "--ver" in args:
         text = "%s %s" % (APP_TITLE, APP_VERSION)
         print(text)
@@ -1125,6 +1367,53 @@ def main():
         print("%s (%s)" % (n, who))
         return 0
 
+    if "--hotkey" in args:
+        cands = hotkey_candidates()
+        custom = cfg_get(CFG_HOTKEY)
+        text = "%s %s\n\n" % (APP_TITLE, APP_VERSION)
+        if custom:
+            text += "自定义热键：%s\n" % custom
+        text += "默认热键：%s\n" % cands[0][0]
+        text += "候选顺序（前面的被占用就自动顺延）：\n  " + \
+                "\n  ".join(d for d, _, _ in cands)
+        print(text)
+        if getattr(sys, "frozen", False):
+            user32.MessageBoxW(None, text, APP_TITLE, 0x40)
+        return 0
+
+    if "--set-hotkey" in args:
+        i = args.index("--set-hotkey")
+        val = (raw[i + 1] if i + 1 < len(raw) else "").strip()
+        parsed = parse_hotkey(val)
+        if not parsed:
+            text = ("热键写法不对：%r\n\n"
+                    "要求「至少一个修饰键 + 一个主键」，且中间不能有空格，例如：\n"
+                    "  Ctrl+Alt+Shift+D\n"
+                    "  Ctrl+Alt+Shift+F9\n"
+                    "  Ctrl+Win+M\n\n"
+                    "修饰键可用：Ctrl / Alt / Shift / Win" % val)
+            print(text)
+            if getattr(sys, "frozen", False):
+                user32.MessageBoxW(None, text, APP_TITLE, 0x40 | 0x10)
+            return 2
+        if not cfg_set(CFG_HOTKEY, val):
+            text = "写注册表失败，热键没改。"
+            print(text)
+            if getattr(sys, "frozen", False):
+                user32.MessageBoxW(None, text, APP_TITLE, 0x40 | 0x10)
+            return 2
+        # 已经有实例在跑就戳它当场换绑，否则新组合要等下次启动才生效
+        hwnd = user32.FindWindowW(WND_CLASS, None)
+        if hwnd:
+            user32.PostMessageW(hwnd, WM_RELOAD_HOTKEY, 0, 0)
+            text = "热键已改为 %s，正在运行的程序已即时换绑。" % val
+        else:
+            text = "热键已改为 %s，下次启动生效。" % val
+        print(text)
+        if getattr(sys, "frozen", False):
+            user32.MessageBoxW(None, text, APP_TITLE, 0x40)
+        return 0
+
     # --tray = 开机自启（静默，不弹窗）；其余无参数启动 = 用户双击图标
     silent_start = "--tray" in args
 
@@ -1134,6 +1423,8 @@ def main():
             return silent(INPUT_DP)
         if any(a in ("--hdmi", "--hdmi1", "--mac") for a in args):
             return silent(INPUT_HDMI1)
+
+    app.no_hotkey = "--no-hotkey" in args
 
     if not silent_start and wake_existing():
         return 0                         # 已有实例，唤起它，本进程立即退出
