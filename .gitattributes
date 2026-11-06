@@ -5,3 +5,9 @@
 *.ico binary
 *.png binary
 *.zip binary
+
+# Windows 批处理必须 CRLF：cmd 解析 goto/label 时对纯 LF 不可靠
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# 给普通用户看的 txt 也用 CRLF，老记事本才不会挤成一行
+*.txt text eol=crlf
