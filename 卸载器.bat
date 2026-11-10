@@ -13,8 +13,9 @@ echo  将要执行：
 echo    1. 结束正在运行的「Monitor Switch.exe」
 echo    2. 删除开机自启项 HKCU ... Run\Monitor Switch（含旧名 MonitorSwitch）
 echo    3. 删除配置 HKCU\Software\Monitor Switch（含旧名 MonitorSwitch）
-echo    4. 清理临时日志 %%TEMP%%\Monitor Switch（含旧目录）
-echo    5. 打开本文件夹，由你把整个文件夹拖进回收站
+echo    4. 删除开始菜单 / 桌面快捷方式
+echo    5. 清理临时日志 %%TEMP%%\Monitor Switch（含旧目录）
+echo    6. 打开本文件夹，由你把整个文件夹拖进回收站
 echo.
 echo  最后一步为什么要你手动拖：
 echo    · 脚本删不掉"自己所在的文件夹"，Windows 会锁住正在运行的文件；
@@ -41,7 +42,21 @@ reg delete "HKCU\Software\Monitor Switch" /f >nul 2>&1
 reg delete "HKCU\Software\MonitorSwitch" /f >nul 2>&1
 if errorlevel 1 (echo        - 没有自定义热键，跳过) else (echo        - 已删除)
 
-echo [4/4] 清理临时日志...
+echo [4/5] 清理快捷方式...
+if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Monitor Switch.lnk" (
+  del /f /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Monitor Switch.lnk" >nul 2>&1
+  echo        - 已删除开始菜单快捷方式
+) else (
+  echo        - 没有开始菜单快捷方式
+)
+if exist "%USERPROFILE%\Desktop\Monitor Switch.lnk" (
+  del /f /q "%USERPROFILE%\Desktop\Monitor Switch.lnk" >nul 2>&1
+  echo        - 已删除桌面快捷方式
+) else (
+  echo        - 没有桌面快捷方式
+)
+
+echo [5/5] 清理临时日志...
 if exist "%%TEMP%%\Monitor Switch" (
   rmdir /s /q "%%TEMP%%\Monitor Switch" 2>nul
   echo        - 已清理
