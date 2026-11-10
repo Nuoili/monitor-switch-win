@@ -89,7 +89,7 @@ Monitor Switch.exe --set-hotkey Ctrl+Alt+Shift+F9  # 改（≥1 修饰键 + 1 �
 Monitor Switch.exe --no-hotkey                     # 本次不注册（排查冲突）
 ```
 
-`--set-hotkey` 写 `HKCU\Software\MonitorSwitch\Hotkey`，并 `PostMessage` 通知正在运行的
+`--set-hotkey` 写 `HKCU\Software\Monitor Switch\Hotkey`，并 `PostMessage` 通知正在运行的
 实例即刻换绑，不用重启；卸载器会把这条注册表项一起清掉。
 
 ### 已知限制
@@ -103,10 +103,11 @@ Monitor Switch.exe --no-hotkey                     # 本次不注册（排查冲
 双击 `卸载器.bat`，它会：
 
 1. 结束正在运行的 `Monitor Switch.exe`
-2. 删除开机自启项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MonitorSwitch`
-3. 删除热键配置 `HKCU\Software\MonitorSwitch`
-4. 清理 `%TEMP%\MonitorSwitch` 下的错误日志
-5. 打开本文件夹并选中，由你把整个文件夹拖进回收站
+2. 删除开机自启项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Monitor Switch`（旧名 `MonitorSwitch` 一并清）
+3. 删除配置 `HKCU\Software\Monitor Switch`（旧键 `Software\MonitorSwitch` 一并清）
+4. 清理 `%TEMP%\Monitor Switch`（含旧目录 `MonitorSwitch`）下的错误日志
+5. 删除开始菜单与桌面快捷方式
+6. 打开本文件夹并选中，由你把整个文件夹拖进回收站
 
 最后一步故意留给人工：脚本删不掉"自己所在的文件夹"，硬删还会被杀软误判成木马
 （实测火绒会把带隐藏窗口 + 递归删除的卸载脚本直接当 `Trojan/Veil` 删掉）。
