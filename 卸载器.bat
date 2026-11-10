@@ -14,7 +14,7 @@ echo    1. 结束正在运行的「Monitor Switch.exe」
 echo    2. 删除开机自启项 HKCU ... Run\Monitor Switch（含旧名 MonitorSwitch）
 echo    3. 删除配置 HKCU\Software\Monitor Switch（含旧名 MonitorSwitch）
 echo    4. 删除开始菜单 / 桌面快捷方式
-echo    5. 清理临时日志 %%TEMP%%\Monitor Switch（含旧目录）
+echo    5. 清理临时日志 %TEMP%\Monitor Switch（含旧目录）
 echo    6. 打开本文件夹，由你把整个文件夹拖进回收站
 echo.
 echo  最后一步为什么要你手动拖：
@@ -27,20 +27,26 @@ set /p "ANS=  继续卸载？[Y=继续 / N=取消]: "
 if /i not "%ANS%"=="Y" goto :cancel
 
 echo.
-echo [1/4] 结束进程...
+echo [1/5] 结束进程...
 taskkill /f /t /im "Monitor Switch.exe" >nul 2>&1
 taskkill /f /t /im "显示器切换.exe" >nul 2>&1
 if errorlevel 1 (echo        - 没有在运行，跳过) else (echo        - 已结束)
 
-echo [2/4] 删除开机自启项...
+echo [2/5] 删除开机自启项...
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Monitor Switch" /f >nul 2>&1
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v MonitorSwitch /f >nul 2>&1
 if errorlevel 1 (echo        - 没有该启动项，跳过) else (echo        - 已删除)
 
-echo [3/4] 删除热键配置...
+echo [3/5] 删除热键配置...
 reg delete "HKCU\Software\Monitor Switch" /f >nul 2>&1
 reg delete "HKCU\Software\MonitorSwitch" /f >nul 2>&1
 if errorlevel 1 (echo        - 没有自定义热键，跳过) else (echo        - 已删除)
+
+rem desktop may be redirected, read real path from registry
+set "DESKTOP="
+for /f "tokens=2,*" %%a in ('reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" /v Desktop 2^>nul') do set "DESKTOP=%%b"
+call set "DESKTOP=%DESKTOP%"
+if not defined DESKTOP set "DESKTOP=%USERPROFILE%\Desktop"
 
 echo [4/5] 清理快捷方式...
 if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Monitor Switch.lnk" (
@@ -49,21 +55,23 @@ if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Monitor Switch.lnk" (
 ) else (
   echo        - 没有开始菜单快捷方式
 )
-if exist "%USERPROFILE%\Desktop\Monitor Switch.lnk" (
-  del /f /q "%USERPROFILE%\Desktop\Monitor Switch.lnk" >nul 2>&1
+if exist "%DESKTOP%\Monitor Switch.lnk" (
+  del /f /q "%DESKTOP%\Monitor Switch.lnk" >nul 2>&1
   echo        - 已删除桌面快捷方式
 ) else (
   echo        - 没有桌面快捷方式
 )
+if exist "%USERPROFILE%\Desktop\Monitor Switch.lnk" del /f /q "%USERPROFILE%\Desktop\Monitor Switch.lnk" >nul 2>&1
+if exist "%PUBLIC%\Desktop\Monitor Switch.lnk" del /f /q "%PUBLIC%\Desktop\Monitor Switch.lnk" >nul 2>&1
 
 echo [5/5] 清理临时日志...
-if exist "%%TEMP%%\Monitor Switch" (
-  rmdir /s /q "%%TEMP%%\Monitor Switch" 2>nul
+if exist "%TEMP%\Monitor Switch" (
+  rmdir /s /q "%TEMP%\Monitor Switch" 2>nul
   echo        - 已清理
 ) else (
   echo        - 无残留
 )
-if exist "%%TEMP%%\MonitorSwitch" rmdir /s /q "%%TEMP%%\MonitorSwitch" 2>nul
+if exist "%TEMP%\MonitorSwitch" rmdir /s /q "%TEMP%\MonitorSwitch" 2>nul
 
 echo.
 echo --------------------------------------------------
