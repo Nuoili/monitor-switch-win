@@ -1,19 +1,19 @@
 @echo off
 chcp 936 >nul
 setlocal EnableExtensions
-title 显示器切换 - 卸载器
+title Monitor Switch - 卸载器
 set "APPDIR=%~dp0"
 if "%APPDIR:~-1%"=="\" set "APPDIR=%APPDIR:~0,-1%"
 
 echo ==================================================
-echo   显示器切换 - 卸载器
+echo   Monitor Switch - 卸载器
 echo ==================================================
 echo.
 echo  将要执行：
-echo    1. 结束正在运行的「显示器切换.exe」
-echo    2. 删除开机自启项 HKCU ... Run\MonitorSwitch
-echo    3. 删除热键配置 HKCU\Software\MonitorSwitch
-echo    4. 清理临时日志 %%TEMP%%\MonitorSwitch
+echo    1. 结束正在运行的「Monitor Switch.exe」
+echo    2. 删除开机自启项 HKCU ... Run\Monitor Switch（含旧名 MonitorSwitch）
+echo    3. 删除配置 HKCU\Software\Monitor Switch（含旧名 MonitorSwitch）
+echo    4. 清理临时日志 %%TEMP%%\Monitor Switch（含旧目录）
 echo    5. 打开本文件夹，由你把整个文件夹拖进回收站
 echo.
 echo  最后一步为什么要你手动拖：
@@ -27,24 +27,28 @@ if /i not "%ANS%"=="Y" goto :cancel
 
 echo.
 echo [1/4] 结束进程...
+taskkill /f /t /im "Monitor Switch.exe" >nul 2>&1
 taskkill /f /t /im "显示器切换.exe" >nul 2>&1
 if errorlevel 1 (echo        - 没有在运行，跳过) else (echo        - 已结束)
 
 echo [2/4] 删除开机自启项...
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Monitor Switch" /f >nul 2>&1
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v MonitorSwitch /f >nul 2>&1
 if errorlevel 1 (echo        - 没有该启动项，跳过) else (echo        - 已删除)
 
 echo [3/4] 删除热键配置...
+reg delete "HKCU\Software\Monitor Switch" /f >nul 2>&1
 reg delete "HKCU\Software\MonitorSwitch" /f >nul 2>&1
 if errorlevel 1 (echo        - 没有自定义热键，跳过) else (echo        - 已删除)
 
 echo [4/4] 清理临时日志...
-if exist "%%TEMP%%\MonitorSwitch" (
-  rmdir /s /q "%%TEMP%%\MonitorSwitch" 2>nul
+if exist "%%TEMP%%\Monitor Switch" (
+  rmdir /s /q "%%TEMP%%\Monitor Switch" 2>nul
   echo        - 已清理
 ) else (
   echo        - 无残留
 )
+if exist "%%TEMP%%\MonitorSwitch" rmdir /s /q "%%TEMP%%\MonitorSwitch" 2>nul
 
 echo.
 echo --------------------------------------------------

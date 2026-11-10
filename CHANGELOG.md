@@ -3,6 +3,35 @@
 双端统一版本号：**Windows（本仓库）与 Mac（monitor-switch-mac）同号同发**。
 发版时两边打同名 tag，仓库间版本号不一致视为发版未完成。
 
+## v2.4.0 — 2026-11-11
+
+**改名版**：产品名从「显示器切换」统一为 **Monitor Switch**，同时修掉标题栏图标不生效。
+
+**改名范围（Windows）**
+| 位置 | 旧 | 新 |
+|---|---|---|
+| 窗口标题 / 托盘提示 | 显示器切换 v2.3.1 | Monitor Switch v2.4.0 |
+| 程序文件 | `显示器切换.exe` | `Monitor Switch.exe` |
+| 安装目录 | `D:\显示器切换` | `D:\Monitor Switch` |
+| 开机自启值名 | `Run\MonitorSwitch` | `Run\Monitor Switch` |
+| 配置键 | `HKCU\Software\MonitorSwitch` | `HKCU\Software\Monitor Switch` |
+| 临时目录 | `%TEMP%\MonitorSwitch` | `%TEMP%\Monitor Switch` |
+| exe 属性 | ProductName=显示器切换 | ProductName=Monitor Switch |
+
+**修 Bug**
+- 标题栏图标退化成系统通用图标：原来用 `LoadIconW(hInstance, MAKEINTRESOURCE(1))`，
+  PyInstaller onefile 里图标组 ID 不保证是 1，取不到就回落到 `IDI_APPLICATION`。
+  改用 `ExtractIconExW(当前 exe, 0)` 取第 0 组，大/小图标分别取（小图标不再拿 32px 硬缩）。
+  另外补一次 `WM_SETICON`，防止部分系统版本忽略窗口类里的 `hIcon`。
+- `SendMessageW` 第 4 参声明为 LPARAM（整数），HICON 对象必须 `.value` 后传，
+  否则打包运行直接抛 `TypeError: 'c_void_p' object cannot be interpreted as an integer`。
+
+**升级兼容**
+- 老版本的开机自启项（值名 `MonitorSwitch`、指向旧 exe）在首次启动时自动改写成新名字 + 新路径，
+  旧值删除；装过 2.3.x 的用户不用手动重设自启。
+- 自定义热键从旧配置键读到后自动搬到新键，不会丢。
+- 卸载器同时清理新旧两套注册表项和临时目录，老机器升级后也能删干净。
+
 ## v2.3.1 — 2026-11-06
 
 Windows 端新增全局热键。Mac 端无对应功能改动，仅版本号跟进，保持双端同号。

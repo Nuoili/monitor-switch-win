@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-显示器切换 —— Windows 端正式程序
+Monitor Switch —— Windows 端正式程序
 
 只有三个功能：
   1. 一键切换显示器信号源（DDC/CI · VCP 0x60）
@@ -36,20 +36,26 @@ import time
 import winreg
 from ctypes import wintypes
 
-APP_TITLE = "显示器切换"
+APP_TITLE = "Monitor Switch"
 # 版本号双端统一：Windows / Mac 两个仓库同号同发，改这里必须同步改 Mac 仓的 VERSION 文件。
 # 2.3.0 = 首次双端对齐版本（Win 2.2 的「来回切失效」修复 + 卸载器 + 版本可见化）
 # 2.3.1 = 全局热键（Windows 端独有，Mac 端用自身脚本/快捷键）
-APP_VERSION = "2.3.1"
+# 2.4.0 = 改名 Monitor Switch（原「显示器切换」）+ 修窗口标题栏图标
+APP_VERSION = "2.4.0"
 APP_TITLE_FULL = "%s v%s" % (APP_TITLE, APP_VERSION)
 VCP_INPUT = 0x60
 INPUT_DP = 0x0F
 INPUT_HDMI1 = 0x11
 
+# 自启项名 / 配置键 / 临时目录都用带空格的产品名，任务管理器和 regedit 里一眼能认。
+# 2.4.0 改名后带 OLD_ 前缀的三个常量只用于「迁移 + 清理旧版残留」。
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-RUN_NAME = "MonitorSwitch"
-CFG_KEY = r"Software\MonitorSwitch"      # 本程序自己的配置（目前只存自定义热键）
+RUN_NAME = "Monitor Switch"
+RUN_NAME_OLD = "MonitorSwitch"
+CFG_KEY = r"Software\Monitor Switch"        # 本程序自己的配置（目前只存自定义热键）
+CFG_KEY_OLD = r"Software\MonitorSwitch"     # 2.3.x 的旧位置，读到就搬到新位置
 CFG_HOTKEY = "Hotkey"
+TEMP_DIR = "Monitor Switch"
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
@@ -273,7 +279,7 @@ def wake_mac():
 
 def log_error(e):
     """--noconsole 打包后 sys.stderr 是 None，直接 write 会二次抛异常、
-    把真正的错误吞掉。改成写 %TEMP%\\MonitorSwitch\\error.log。"""
+    把真正的错误吞掉。改成写 %TEMP%\\Monitor Switch\\error.log。"""
     line = "%s %r\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), e)
     try:
         if sys.stderr:
@@ -281,7 +287,7 @@ def log_error(e):
     except Exception:
         pass
     try:
-        d = os.path.join(tempfile.gettempdir(), "MonitorSwitch")
+        d = os.path.join(tempfile.gettempdir(), TEMP_DIR)
         os.makedirs(d, exist_ok=True)
         p = os.path.join(d, "error.log")
         if os.path.exists(p) and os.path.getsize(p) > 256 * 1024:
@@ -383,13 +389,28 @@ def parse_hotkey(text):
     return mods, vk
 
 
-def cfg_get(name):
+def _cfg_read(key, name):
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CFG_KEY) as k:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
             v, _ = winreg.QueryValueEx(k, name)
             return v
     except OSError:
         return None
+
+
+def cfg_get(name):
+    """读配置；新位置没有就回落到 2.3.x 的旧键，读到后顺手搬过来。
+
+    2.4.0 把配置键从 Software\\MonitorSwitch 改成了 Software\\Monitor Switch，
+    不迁移的话老用户自定义的热键会凭空失效。
+    """
+    v = _cfg_read(CFG_KEY, name)
+    if v is not None:
+        return v
+    v = _cfg_read(CFG_KEY_OLD, name)
+    if v is not None:
+        cfg_set(name, v)
+    return v
 
 
 def cfg_set(name, value):
@@ -484,23 +505,52 @@ def set_autostart(enable):
         return False
 
 
-def migrate_autostart():
-    """旧版本开机项带的是 --auto，补上 --tray，升级后开机就能有托盘。
-
-    只在打包后的 exe 里做。源码直跑时 exe_path() 是 .py，写进注册表等于
-    给开机留一条错的命令。
-    """
-    if not getattr(sys, "frozen", False):
-        return
+def _run_value(name):
     try:
         k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ)
         try:
-            val, _ = winreg.QueryValueEx(k, RUN_NAME)
+            val, _ = winreg.QueryValueEx(k, name)
+            return val
         finally:
             winreg.CloseKey(k)
     except OSError:
+        return None
+
+
+def _del_run_value(name):
+    try:
+        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE)
+        try:
+            winreg.DeleteValue(k, name)
+        finally:
+            winreg.CloseKey(k)
+    except OSError:
+        pass
+
+
+def migrate_autostart():
+    """把旧版的开机项迁到 2.4.0 的新名字 / 新路径上。
+
+    2.4.0 把程序从「显示器切换.exe」改名成「Monitor Switch.exe」，旧的开机项
+    值名是 MonitorSwitch、路径指向旧 exe。留着它会开机弹「找不到文件」，所以：
+      · 旧值在 → 说明用户原来就勾了自启，按新名字 + 当前 exe 路径重写，再删旧值
+      · 新值在但戳的不是当前 exe → 重写（换过目录、或改名前后路径不一致）
+
+    只在打包后的 exe 里做：源码直跑时 exe_path() 是 .py，写进注册表等于给
+    开机留一条错的命令。
+    """
+    if not getattr(sys, "frozen", False):
         return
-    if "--tray" not in val:
+
+    old = _run_value(RUN_NAME_OLD)
+    cur = _run_value(RUN_NAME)
+
+    if old:
+        _del_run_value(RUN_NAME_OLD)
+        set_autostart(True)
+        return
+
+    if cur and exe_path().lower() not in cur.lower():
         set_autostart(True)
 
 
@@ -512,6 +562,8 @@ WM_CTLCOLORSTATIC = 0x0138
 WM_NULL = 0x0000
 WM_LBUTTONUP, WM_RBUTTONUP, WM_LBUTTONDBLCLK = 0x0202, 0x0205, 0x0203
 WM_HOTKEY = 0x0312
+WM_SETICON = 0x0080
+ICON_SMALL, ICON_BIG = 0, 1       # WM_SETICON 的 wParam
 
 # ---- 托盘
 WM_APP = 0x8000
@@ -525,6 +577,7 @@ ID_TRAY = 1
 MENU_MAC, MENU_WIN, MENU_SHOW, MENU_AUTO, MENU_QUIT = 201, 202, 203, 204, 205
 SW_HIDE = 0
 SM_CXSMICON, SM_CYSMICON = 49, 50
+SM_CXICON, SM_CYCICON = 11, 12
 IMAGE_ICON = 1
 LR_LOADFROMFILE = 0x0010
 CLR_INVALID = 0xFFFFFFFF
@@ -609,6 +662,16 @@ user32.SendMessageW.restype = ctypes.c_ssize_t
 
 user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
 user32.SetWindowTextW.restype = wintypes.BOOL
+
+# 取 exe 里的图标资源。LoadIconW(hinst, 1) 在 PyInstaller onefile 里经常拿不到
+# 真正编进去的那组图标（组 ID 不保证是 1），结果标题栏退化成系统的通用图标 ——
+# 这就是 v2.3.x 截图里那个"不像自己 logo"的方框。ExtractIconExW 按 exe 路径取
+# 第 0 组图标，大/小两个尺寸分别要。
+# 注意在 shell32 里，不在 user32
+shell32.ExtractIconExW.argtypes = [wintypes.LPCWSTR, ctypes.c_int,
+                                   ctypes.POINTER(wintypes.HICON),
+                                   ctypes.POINTER(wintypes.HICON), wintypes.UINT]
+shell32.ExtractIconExW.restype = wintypes.UINT
 
 user32.MessageBoxW.argtypes = [wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT]
 user32.MessageBoxW.restype = ctypes.c_int
@@ -739,7 +802,7 @@ def _tray_ico_file(kind):
     if path and os.path.exists(path):
         return path
     try:
-        d = os.path.join(tempfile.gettempdir(), "MonitorSwitch")
+        d = os.path.join(tempfile.gettempdir(), TEMP_DIR)
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, "tray_%s.ico" % kind)
         data = base64.b64decode(_TRAY_ICO[kind])
@@ -787,6 +850,41 @@ def _taskbar_is_light():
         return n > 0 and (tot / n) > 140
     except Exception:
         return False
+
+
+def app_icons():
+    """返回 (大图标, 小图标)，用于窗口类 + 标题栏。
+
+    三条回落路径，按可靠性从高到低：
+      1. 从当前 exe 里取图标资源 —— 打包后走这条，是真正编进 exe 的 logo
+      2. 源码目录下的 icon.ico —— 用 python 直接跑时走这条
+      3. 系统默认应用图标 —— 兜底，总比没有强
+    小图标必须单独取：直接把 32px 的图塞进 ICON_SMALL，标题栏会糊成一团。
+    """
+    big = wintypes.HICON()
+    sml = wintypes.HICON()
+
+    exe = sys.executable or ""
+    # frozen 才从 exe 取；源码直跑时 sys.executable 是 python.exe，取出来是 Python 的图标
+    if getattr(sys, "frozen", False) and exe.lower().endswith(".exe"):
+        try:
+            n = shell32.ExtractIconExW(exe, 0, ctypes.byref(big), ctypes.byref(sml), 1)
+            if n and (big.value or sml.value):
+                return big.value and big, sml.value and sml
+        except Exception:
+            pass
+
+    ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+    if os.path.exists(ico):
+        cb = user32.GetSystemMetrics(SM_CXICON) or 32
+        cs = user32.GetSystemMetrics(SM_CXSMICON) or 16
+        b = user32.LoadImageW(None, ico, IMAGE_ICON, cb, cb, LR_LOADFROMFILE)
+        s = user32.LoadImageW(None, ico, IMAGE_ICON, cs, cs, LR_LOADFROMFILE)
+        if b or s:
+            return b, s
+
+    h = user32.LoadIconW(None, ctypes.c_void_p(32512))   # IDI_APPLICATION
+    return h, h
 
 
 def tray_icon():
@@ -1252,11 +1350,13 @@ def run_gui(selftest=False, start_hidden=False):
     app.brush = gdi32.CreateSolidBrush(BG)
 
     try:
-        hicon = user32.LoadIconW(hinst, ctypes.c_void_p(1))
+        hicon, hicon_sm = app_icons()
     except Exception:
-        hicon = None
+        hicon, hicon_sm = None, None
     if not hicon:
         hicon = user32.LoadIconW(None, ctypes.c_void_p(32512))
+    if not hicon_sm:
+        hicon_sm = hicon
     _hicon_app[0] = hicon
 
     cls = WND_CLASS
@@ -1266,7 +1366,7 @@ def run_gui(selftest=False, start_hidden=False):
     wc.lpfnWndProc = wndproc_cb
     wc.hInstance = hinst
     wc.hIcon = hicon
-    wc.hIconSm = hicon
+    wc.hIconSm = hicon_sm
     wc.hCursor = user32.LoadCursorW(None, ctypes.c_void_p(32512))
     wc.hbrBackground = app.brush
     wc.lpszClassName = cls
@@ -1285,6 +1385,14 @@ def run_gui(selftest=False, start_hidden=False):
     hwnd = user32.CreateWindowExW(0, cls, APP_TITLE_FULL, style, x, y, w, h, None, None, hinst, None)
     if not hwnd:
         return 2
+    # 再显式设一次：某些系统版本对窗口类里的 hIcon 不生效（尤其 onefile 解包后）。
+    # 注意 SendMessageW 的第 4 个参数声明成 LPARAM（整数），ctypes 的 HICON 对象
+    # 不能直传，必须先取 .value，否则打包后会抛
+    # "argument 4: TypeError: 'c_void_p' object cannot be interpreted as an integer"。
+    def _hv(h):
+        return h.value if isinstance(h, ctypes.c_void_p) else int(h or 0)
+    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, _hv(hicon))
+    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, _hv(hicon_sm))
     if not start_hidden:
         user32.ShowWindow(hwnd, SW_SHOW)
         user32.UpdateWindow(hwnd)

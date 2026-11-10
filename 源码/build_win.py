@@ -7,7 +7,7 @@
 用法（仓库根目录）：
     python 源码/build_win.py
 产物：
-    源码/dist/显示器切换.exe   （再手动覆盖到仓库根的 显示器切换.exe）
+    源码/dist/Monitor Switch.exe   （再手动覆盖到仓库根的 Monitor Switch.exe）
 """
 
 import os
@@ -28,12 +28,12 @@ VERSION_INFO_TMPL = u"""VSVersionInfo(
   kids=[
     StringFileInfo([StringTable(u'080404B0', [
       StringStruct(u'CompanyName', u'Nuoili'),
-      StringStruct(u'FileDescription', u'显示器切换 · Windows 端（DDC/CI 一键切信号源）'),
+      StringStruct(u'FileDescription', u'{title} · Windows 端（DDC/CI 一键切信号源）'),
       StringStruct(u'FileVersion', u'{ver}.0'),
       StringStruct(u'InternalName', u'MonitorSwitch'),
+      StringStruct(u'OriginalFilename', u'{title}.exe'),
       StringStruct(u'LegalCopyright', u'MIT License'),
-      StringStruct(u'OriginalFilename', u'显示器切换.exe'),
-      StringStruct(u'ProductName', u'显示器切换'),
+      StringStruct(u'ProductName', u'{title}'),
       StringStruct(u'ProductVersion', u'{ver}')
     ])]),
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
@@ -65,7 +65,7 @@ def main():
 
     vi_path = os.path.join(SRC_DIR, "version_info.txt")
     with open(vi_path, "w", encoding="utf-8") as f:
-        f.write(VERSION_INFO_TMPL.format(v0=v0, v1=v1, v2=v2, ver=ver))
+        f.write(VERSION_INFO_TMPL.format(v0=v0, v1=v1, v2=v2, ver=ver, title=title))
     print("version_info.txt -> %s" % ver)
 
     cmd = [

@@ -1,7 +1,8 @@
-# 显示器切换 · Windows 端
+# Monitor Switch · Windows 端
 
-**v2.3.1** — 与 Mac 端 [monitor-switch-mac](https://github.com/Nuoili/monitor-switch-mac) 同号发布，两端版本号必须保持一致。
-本版新增 Windows 端全局热键（Mac 端无此功能，仅版本号跟进）。
+**v2.4.0** — 与 Mac 端 [monitor-switch-mac](https://github.com/Nuoili/monitor-switch-mac) 同号发布，两端版本号必须保持一致。
+本版是**改名版**：程序、exe、目录、注册表项统一成 `Monitor Switch`（原名「显示器切换」），
+并修掉标题栏取不到应用图标、退化成系统通用图标的问题。老版本会自动迁移开机自启项，不用重装。
 
 一台显示器接两台机器（Windows 主机 + MacBook），点一下就能换信号源，不用去按显示器背面的按钮。
 
@@ -13,7 +14,7 @@
 
 ## 用法
 
-从 [Releases](../../releases) 下载 `显示器切换.exe`，双击即用，图标在托盘。
+从 [Releases](../../releases) 下载 `Monitor Switch.exe`，双击即用，图标在托盘。
 
 | 操作 | 结果 |
 |---|---|
@@ -26,16 +27,16 @@
 命令行（供快捷方式 / 开机自启使用）：
 
 ```
-显示器切换.exe                      打开窗口
-显示器切换.exe --tray               静默进托盘（开机自启用这条）
-显示器切换.exe --auto --tray        先切回 Windows 再进托盘
-显示器切换.exe --dp / --win         静默切到 DP（Windows）
-显示器切换.exe --hdmi / --mac       静默切到 HDMI-1（Mac）
-显示器切换.exe --state              打印当前信号源，排查用
-显示器切换.exe --version            打印版本号
-显示器切换.exe --hotkey             看当前热键与候选顺序
-显示器切换.exe --set-hotkey X       改热键，X 形如 Ctrl+Alt+Shift+F9
-显示器切换.exe --no-hotkey          本次不注册热键（排查冲突用）
+Monitor Switch.exe                      打开窗口
+Monitor Switch.exe --tray               静默进托盘（开机自启用这条）
+Monitor Switch.exe --auto --tray        先切回 Windows 再进托盘
+Monitor Switch.exe --dp / --win         静默切到 DP（Windows）
+Monitor Switch.exe --hdmi / --mac       静默切到 HDMI-1（Mac）
+Monitor Switch.exe --state              打印当前信号源，排查用
+Monitor Switch.exe --version            打印版本号
+Monitor Switch.exe --hotkey             看当前热键与候选顺序
+Monitor Switch.exe --set-hotkey X       改热键，X 形如 Ctrl+Alt+Shift+F9
+Monitor Switch.exe --no-hotkey          本次不注册热键（排查冲突用）
 ```
 
 版本号从哪来：`源码/monitor_switch_gui.py` 的 `APP_VERSION` 是唯一源头，
@@ -83,9 +84,9 @@
 ### 改键 / 临时关闭
 
 ```bash
-显示器切换.exe --hotkey                        # 看当前生效的组合与候选顺序
-显示器切换.exe --set-hotkey Ctrl+Alt+Shift+F9  # 改（≥1 修饰键 + 1 主键，不能有空格）
-显示器切换.exe --no-hotkey                     # 本次不注册（排查冲突）
+Monitor Switch.exe --hotkey                        # 看当前生效的组合与候选顺序
+Monitor Switch.exe --set-hotkey Ctrl+Alt+Shift+F9  # 改（≥1 修饰键 + 1 主键，不能有空格）
+Monitor Switch.exe --no-hotkey                     # 本次不注册（排查冲突）
 ```
 
 `--set-hotkey` 写 `HKCU\Software\MonitorSwitch\Hotkey`，并 `PostMessage` 通知正在运行的
@@ -101,7 +102,7 @@
 
 双击 `卸载器.bat`，它会：
 
-1. 结束正在运行的 `显示器切换.exe`
+1. 结束正在运行的 `Monitor Switch.exe`
 2. 删除开机自启项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MonitorSwitch`
 3. 删除热键配置 `HKCU\Software\MonitorSwitch`
 4. 清理 `%TEMP%\MonitorSwitch` 下的错误日志
@@ -147,21 +148,21 @@ CHANGELOG.md         版本变更记录
 
 ```bash
 pip install pyinstaller
-python 源码/build_win.py          # 产物：源码/dist/显示器切换.exe
+python 源码/build_win.py          # 产物：源码/dist/Monitor Switch.exe
 ```
 
 脚本内部等价于：
 
 ```bash
 python -m PyInstaller --noconfirm --clean --onefile --noconsole \
-  --name 显示器切换 --manifest 源码/app.manifest --icon 源码/icon.ico \
+  --name "Monitor Switch" --manifest 源码/app.manifest --icon 源码/icon.ico \
   --version-file 源码/version_info.txt 源码/monitor_switch_gui.py
 ```
 
 回归测试（真机会弹出程序窗口）：
 
 ```bash
-python 源码/_single_instance_test.py 源码/dist/显示器切换.exe
+python 源码/_single_instance_test.py 源码/dist/Monitor Switch.exe
 python 源码/_busy_test.py
 ```
 

@@ -1,12 +1,12 @@
-显示器信号源一键切换  v2.3.1
-============================
+Monitor Switch  显示器信号源一键切换  v2.4.0
+==================================================
 
 Windows 端常驻系统托盘：点托盘图标就能切信号源，不用开窗口、不用找文件夹。
 
 
 ■ Windows（已经装好，可直接用）
 
-  程序：显示器切换.exe（只有一个文件，绿色免安装）
+  程序：Monitor Switch.exe（只有一个文件，绿色免安装）
 
   运行后任务栏右下角出现一个显示器图标（两个蓝绿色方块叠在一起）。
   看不见就点托盘左边的 ^ 展开，那里能把它拖到外面固定住。
@@ -69,25 +69,25 @@ Windows 端常驻系统托盘：点托盘图标就能切信号源，不用开窗
     五个全被占的话，托盘会弹一个提示，右键菜单照样能切。
 
   换成自己顺手的
-      显示器切换.exe --set-hotkey Ctrl+Alt+Shift+F9
+      Monitor Switch.exe --set-hotkey Ctrl+Alt+Shift+F9
     要求：至少一个修饰键 + 一个主键，中间不能有空格。
     修饰键可用 Ctrl / Alt / Shift / Win。
     程序正在跑的话会立刻换绑，不用重启。
 
   看当前用的是哪个
-      显示器切换.exe --hotkey
+      Monitor Switch.exe --hotkey
 
   临时关掉热键（比如和某个游戏冲突）
-      显示器切换.exe --no-hotkey
+      Monitor Switch.exe --no-hotkey
 
-  热键配置存在注册表 HKCU\Software\MonitorSwitch\Hotkey，卸载器会一并清掉。
+  热键配置存在注册表 HKCU\Software\Monitor Switch\Hotkey，卸载器会一并清掉。
 
 
 ■ macOS（需要先装一次 m1ddc，之后永久可用）
 
   把整个 macOS 文件夹拖到 Mac 上，然后在「终端」里执行一次：
 
-      chmod +x ~/Desktop/显示器切换/macOS/*.command
+      chmod +x ~/Desktop/Monitor Switch/macOS/*.command
 
   （路径按你实际存放位置改）
 
@@ -108,7 +108,7 @@ Windows 端常驻系统托盘：点托盘图标就能切信号源，不用开窗
   Q: 托盘里找不到图标？
   A: 1) 先点任务栏托盘的 ^ 看是不是收进溢出区了，拖出来即可
      2) 资源管理器重启过的话，程序会自动把图标补回去
-     3) 还是没有就重新双击一次 显示器切换.exe
+     3) 还是没有就重新双击一次 Monitor Switch.exe
 
   Q: 点了菜单里的切换没反应？
   A: 显示器没响应 DDC 命令。检查显示器 OSD 菜单里的「DDC/CI」是否开启。
@@ -131,7 +131,7 @@ Windows 端常驻系统托盘：点托盘图标就能切信号源，不用开窗
         切到桌面再按即可
 
   Q: 热键和某个软件冲突？
-  A: 显示器切换.exe --set-hotkey Ctrl+Alt+Shift+F9 换一个，
+  A: Monitor Switch.exe --set-hotkey Ctrl+Alt+Shift+F9 换一个，
      或用 --no-hotkey 临时停用（托盘菜单照样能切）。
 
 
@@ -144,16 +144,16 @@ Windows 端常驻系统托盘：点托盘图标就能切信号源，不用开窗
 
 ■ 命令行（给快捷方式 / 计划任务用）
 
-    显示器切换.exe                 打开主窗口
-    显示器切换.exe --tray          直接进托盘，不弹窗口
-    显示器切换.exe --auto --tray   先静默切回 Windows，再进托盘（开机自启用的就是这条）
-    显示器切换.exe --mac           静默切到 HDMI-1，执行完退出
-    显示器切换.exe --dp            静默切到 DisplayPort，执行完退出
-    显示器切换.exe --state         打印当前信号源，不弹窗
-    显示器切换.exe --version       看版本号
-    显示器切换.exe --hotkey        看当前热键和候选顺序
-    显示器切换.exe --set-hotkey X  改热键，X 形如 Ctrl+Alt+Shift+F9（会弹窗确认）
-    显示器切换.exe --no-hotkey     本次不注册热键（排查热键冲突用）
+    Monitor Switch.exe                 打开主窗口
+    Monitor Switch.exe --tray          直接进托盘，不弹窗口
+    Monitor Switch.exe --auto --tray   先静默切回 Windows，再进托盘（开机自启用的就是这条）
+    Monitor Switch.exe --mac           静默切到 HDMI-1，执行完退出
+    Monitor Switch.exe --dp            静默切到 DisplayPort，执行完退出
+    Monitor Switch.exe --state         打印当前信号源，不弹窗
+    Monitor Switch.exe --version       看版本号
+    Monitor Switch.exe --hotkey        看当前热键和候选顺序
+    Monitor Switch.exe --set-hotkey X  改热键，X 形如 Ctrl+Alt+Shift+F9（会弹窗确认）
+    Monitor Switch.exe --no-hotkey     本次不注册热键（排查热键冲突用）
 
 
 ■ 切回 Mac 时黑屏 / 显示器报「无信号」
@@ -175,9 +175,9 @@ Windows 端常驻系统托盘：点托盘图标就能切信号源，不用开窗
 ■ 卸载
 
   双击同目录的「卸载器.bat」，按提示输入 Y。它会：
-    1. 结束正在运行的显示器切换.exe
-    2. 删掉开机自启项（注册表 Run\MonitorSwitch）
-    3. 清理 %TEMP%\MonitorSwitch 里的错误日志
+    1. 结束正在运行的 Monitor Switch.exe
+    2. 删掉开机自启项（注册表 Run\Monitor Switch）
+    3. 清理 %TEMP%\Monitor Switch 里的错误日志
     4. 打开本文件夹并选中，你把它整个拖进回收站就行
 
   最后一步故意留给你手动拖：脚本删不掉自己所在的文件夹，
